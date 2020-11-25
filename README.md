@@ -40,3 +40,4 @@ python3.8
 
 # resources
 - https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/using_your_own_dataset.md
+- https://www.pyimagesearch.com/2020/04/20/detect-and-remove-duplicate-images-from-a-dataset-for-deep-learning/

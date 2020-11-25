@@ -25,10 +25,44 @@ from IPython.display import display
 
 import PIL
 import json
+import cv2
 
 
 class CocoClassNotFound(Exception):
     pass
+
+
+def dhash(image, hashSize=8):
+    # convert the image to grayscale and resize the grayscale image,
+    # adding a single column (width) so we can compute the horizontal
+    # gradient
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    resized = cv2.resize(gray, (hashSize + 1, hashSize))
+    # compute the (relative) horizontal gradient between adjacent
+    # column pixels
+    diff = resized[:, 1:] > resized[:, :-1]
+    # convert the difference image to a hash and return it
+    return sum([2 ** i for (i, v) in enumerate(diff.flatten()) if v])
+
+
+def dedupeFiles(files):
+    print('[DOGGO] deduping files', len(files))
+    unique_files = []
+
+    hashes = {}
+    for f in files:
+        try:
+            image = Image.open(f)
+            h = dhash(np.array(image.convert('RGB')))
+            if h not in hashes.keys():
+                unique_files.append(f)
+                hashes[h] = [f]
+            else:
+                hashes[h].append(f)
+        except PIL.UnidentifiedImageError as e:
+            print('ERROR:', e)
+
+    return unique_files
 
 
 def generate_and_persist_labels(labels, outdir):
@@ -92,7 +126,7 @@ class TfGen:
 
     @cached_property
     def detection_model(self):
-        print('loading model...', self.cocomodel)
+        print('[DOGGO] loading model...', self.cocomodel)
         # print('../training/ssd_resnet50_v1_fpn_640x640_coco17_tpu-8/saved_model')
         # return p
         return tf.saved_model.load(self.cocomodel)
@@ -120,7 +154,7 @@ class TfGen:
         return output_dict['detection_boxes'][0][0]
 
     def toExampleTf(self, jpg_path, label):
-        print('label {} example {}'.format(label, jpg_path))
+        print('[DOGGO] label {} example {}'.format(label, jpg_path))
 
         with tf.io.gfile.GFile(jpg_path, 'rb') as fid:
             encoded_image_data = fid.read()
@@ -160,10 +194,11 @@ class LabelGen:
     def __init__(self, label, files, tf_gen, jpg_cache):
         self.label = label
         self.files = files
+        self.unique_files = dedupeFiles(files)
         self.tf_gen = tf_gen
         self.jpg_cache = jpg_cache
 
-        self.ids = list(range(0, len(self.files)))
+        self.ids = list(range(0, len(self.unique_files)))
         random.shuffle(self.ids)
         self.i = 0
 
@@ -172,11 +207,17 @@ class LabelGen:
         idx = self.ids[self.i]
         self.i += 1
 
-        jpg_path = jpg_cache.toJpg(self.files[idx], self.label)
+        jpg_path = jpg_cache.toJpg(self.unique_files[idx], self.label)
         return self.tf_gen.toExampleTf(jpg_path, self.label)
+
+    def count(self):
+        return len(self.ids)
 
     def total(self):
         return len(self.files)
+
+    def skipCount(self):
+        return len(self.files) - len(self.unique_files)
 
     def getLabel(self):
         return self.label
@@ -256,20 +297,16 @@ all_test = []
 for gen in label_gens:
     total = gen.total()
     not_detected_count = 0
-    not_image_count = 0
 
     # collect as many examples as needed
     ex = []
-    for i in range(total):
+    for i in range(gen.count()):
         try:
             next_tf = gen.next()
             ex.append(next_tf)
         except CocoClassNotFound as e:
             print('ERROR:', e)
             not_detected_count += 1
-        except PIL.UnidentifiedImageError as e:
-            print('ERROR:', e)
-            not_image_count += 1
 
         if args.maxperlabel and len(ex) >= int(args.maxperlabel):
             break
@@ -286,10 +323,10 @@ for gen in label_gens:
     stats['labels'][gen.getLabel()] = {
         'total': total,
         'not_detected_count': not_detected_count,
-        'not_image_count': not_image_count,
         'train': len(train),
         'test': len(test),
         'count': len(ex),
+        'skip_count': gen.skipCount(),
     }
 
 with tf.io.TFRecordWriter(os.path.join(args.output, 'train.tfrecords')) as writer:
