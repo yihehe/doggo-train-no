@@ -19,57 +19,61 @@ from object_detection.utils import label_map_util
 from IPython.display import display
 
 
-pretrained_model = tf.saved_model.load('training/ssd_resnet50_v1_fpn_640x640_coco17_tpu-8/saved_model')
-label_map = label_map_util.load_labelmap('training/annotations/pose_label_map.pbtxt')
+pretrained_model = tf.saved_model.load(
+    'training/ssd_resnet50_v1_fpn_640x640_coco17_tpu-8/saved_model')
+label_map = label_map_util.load_labelmap(
+    'training/annotations/pose_label_map.pbtxt')
 label_map_dict = label_map_util.get_label_map_dict(label_map)
+
 
 def run_inference_for_single_image(model, image):
     image = np.asarray(image)
     # The input needs to be a tensor, convert it using `tf.convert_to_tensor`.
     input_tensor = tf.convert_to_tensor(image)
     # The model expects a batch of images, so add an axis with `tf.newaxis`.
-    input_tensor = input_tensor[tf.newaxis,...]
+    input_tensor = input_tensor[tf.newaxis, ...]
 
     # Run inference
     model_fn = model.signatures['serving_default']
     output_dict = model_fn(input_tensor)
     return output_dict
 
+
 def convertJpg(image_path, label):
     filename = os.path.basename(image_path)
-    
+
     new_file = Path(gen_dir + label + '/' + filename)
     dest_path = new_file.with_suffix('.jpg')
-    
+
     if Path.exists(dest_path):
         return str(dest_path)
-    
+
     Path.mkdir(dest_path.parent, parents=True, exist_ok=True)
-    
+
     im = Image.open(image_path)
-    
+
     resize = 300
     width, height = im.size
     if width < height:
         wpercent = (resize/float(width))
         hsize = int((float(height)*float(wpercent)))
-        im = im.resize((resize,hsize), Image.ANTIALIAS)
+        im = im.resize((resize, hsize), Image.ANTIALIAS)
     else:
         hpercent = (resize/float(height))
         wsize = int((float(width)*float(hpercent)))
-        im = im.resize((wsize,resize), Image.ANTIALIAS)
-    
+        im = im.resize((wsize, resize), Image.ANTIALIAS)
+
 #     im = im.resize((im.size[0]//2, im.size[1]//2))
     rgb_im = im.convert('RGB')
     rgb_im.save(dest_path, 'jpeg')
-    
+
     return str(dest_path)
 
 
 def toExampleTf(image_path, label):
     path = convertJpg(image_path, label)
     print(path)
-    
+
     with tf.io.gfile.GFile(path, 'rb') as fid:
         encoded_image_data = fid.read()
     image = Image.open(io.BytesIO(encoded_image_data))
@@ -77,19 +81,20 @@ def toExampleTf(image_path, label):
 
     filename = os.path.basename(path).encode('utf8')
     image_format = b'jpg'
-        
+
     image_np = np.array(image)
-    output_dict=run_inference_for_single_image(pretrained_model, image_np)
+    output_dict = run_inference_for_single_image(pretrained_model, image_np)
     if int(output_dict['detection_classes'][0][0]) != 18:
         print('NOT A DOG')
         print(output_dict['detection_classes'][0][:4])
-        index = label_map_util.create_category_index_from_labelmap('models/research/object_detection/data/mscoco_label_map.pbtxt', use_display_name=True)
-            
+        index = label_map_util.create_category_index_from_labelmap(
+            'models/research/object_detection/data/mscoco_label_map.pbtxt', use_display_name=True)
+
         num_detections = int(output_dict.pop('num_detections'))
         num2 = int(100)
         #   print(num_detections == num2)
-        output_dict = {key:value[0, :num2].numpy() 
-                       for key,value in output_dict.items()}
+        output_dict = {key: value[0, :num2].numpy()
+                       for key, value in output_dict.items()}
         output_dict['num_detections'] = num2
 
         #   print(output_dict['detection_boxes'][:2])
@@ -103,8 +108,9 @@ def toExampleTf(image_path, label):
         #   print('output!', output_dict['detection_boxes'][:1])
 
         # detection_classes should be ints.
-        output_dict['detection_classes'] = output_dict['detection_classes'].astype(np.int64)
-        
+        output_dict['detection_classes'] = output_dict['detection_classes'].astype(
+            np.int64)
+
         vis_util.visualize_boxes_and_labels_on_image_array(
             image_np,
             output_dict['detection_boxes'],
@@ -122,7 +128,7 @@ def toExampleTf(image_path, label):
     xmaxs = [xmax.numpy()]
     ymins = [ymin.numpy()]
     ymaxs = [ymax.numpy()]
-    
+
     classes_text = [label.encode('utf8')]
     classes = [label_map_dict[label]]
 
@@ -141,17 +147,18 @@ def toExampleTf(image_path, label):
         'image/object/class/label': dataset_util.int64_list_feature(classes),
     }))
 
+
 def partition(paths, num, ratio, label):
     ids = list(range(0, len(paths)))
     random.shuffle(ids)
-    
+
     split = int(num*ratio)
     train_ids = ids[:split]
     test_ids = ids[split:num]
-    
+
     print(train_ids)
     print(test_ids)
-    
+
     train_tfs = []
     test_tfs = []
     for idx in train_ids:
@@ -160,15 +167,16 @@ def partition(paths, num, ratio, label):
             train_tfs.append(ex)
         else:
             print('skipping')
-    
+
     for idx in test_ids:
         ex = toExampleTf(paths[idx], label)
         if ex != None:
             test_tfs.append(ex)
         else:
             print('skipping')
-            
+
     return train_tfs, test_tfs
+
 
 data_dir = "Dog photos for Yi/"
 stand_photos = glob.glob(data_dir + 'Stand/' + '*')
