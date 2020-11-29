@@ -32,12 +32,18 @@ def getCurrentStep(model_dir, ret_value):
     ret_value.value = int(global_step.numpy())
 
 
-def runTrainLoop(pipeline_config_path, model_dir, train_steps, checkpoint_every_n):
-    model_lib_v2.train_loop(
-        pipeline_config_path=pipeline_config_path,
-        model_dir=model_dir,
-        train_steps=train_steps,
-        checkpoint_every_n=checkpoint_every_n)
+def runTrainLoop(pipeline_config_path, model_dir, checkpoint_every_n, train_steps = None):
+    if train_steps:
+        model_lib_v2.train_loop(
+            pipeline_config_path=pipeline_config_path,
+            model_dir=model_dir,
+            train_steps=train_steps,
+            checkpoint_every_n=checkpoint_every_n)
+    else:
+        model_lib_v2.train_loop(
+            pipeline_config_path=pipeline_config_path,
+            model_dir=model_dir,
+            checkpoint_every_n=checkpoint_every_n)
 
 
 def runEval(pipeline_config_path, model_dir, train_steps, sample_1_of_n_eval_examples, sample_1_of_n_eval_on_train_examples):

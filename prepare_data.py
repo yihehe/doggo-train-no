@@ -81,6 +81,23 @@ def generate_and_persist_labels(labels, outdir):
     return label_map_util.get_label_map_dict(label_map)
 
 
+def writeTfRecords(examples, out, num_shards = None):
+    if num_shards:
+        num_shards = int(num_shards)
+        print(num_shards)
+        with contextlib2.ExitStack() as tf_record_close_stack:
+            output_tfrecords = tf_record_creation_util.open_sharded_output_tfrecords(tf_record_close_stack, out, num_shards)
+            print(len(output_tfrecords))
+            for idx, ex in enumerate(examples):
+                print(idx)
+                output_shard_index = idx % num_shards
+                print(output_shard_index)
+                output_tfrecords[output_shard_index].write(ex.SerializeToString())
+    else:
+        with tf.io.TFRecordWriter(out) as writer:
+            for ex in examples:
+                writer.write(ex.SerializeToString())
+
 class JpgCache:
     def __init__(self, outdir, mindim=None):
         self.outdir = outdir
@@ -270,6 +287,10 @@ parser.add_argument(
     '--maxperlabel', help='limit the max number of examples per label')
 parser.add_argument(
     '--mindim', help='minimum dimension to resize to (if provided)')
+parser.add_argument('--equalcounts', action='store_true',
+                    help='if we should have the same number of counts per label')
+parser.add_argument('--shards', 
+                    help='number of shards to write the training TfRecords')
 
 args = parser.parse_args()
 
@@ -286,15 +307,15 @@ tf_gen = TfGen(generate_and_persist_labels(
     labels, args.output), args.coco, target_coco_class)
 jpg_cache = JpgCache(args.output, args.mindim)
 
-label_gens = []
+label_gens = {}
 for l in labels:
     files = [os.path.join(args.dataset, l, f)
              for f in os.listdir(os.path.join(args.dataset, l))]
-    label_gens.append(LabelGen(l, files, tf_gen, jpg_cache))
+    label_gens[l] = LabelGen(l, files, tf_gen, jpg_cache)
 
-all_train = []
-all_test = []
-for gen in label_gens:
+
+label_data = {}
+for l, gen in label_gens.items():
     total = gen.total()
     not_detected_count = 0
 
@@ -311,41 +332,49 @@ for gen in label_gens:
         if args.maxperlabel and len(ex) >= int(args.maxperlabel):
             break
 
+    label_data[l] = ex
+    
+    stats['labels'][l] = {
+        'total': total,
+        'not_detected_count': not_detected_count,
+        'count': len(ex),
+        'skip_count': gen.skipCount(),
+    }
+
+all_train = []
+all_test = []
+for l, data in label_data.items():
+    print(l, len(data))
+    usable_len = len(min(label_data.values(), key=len)) if args.equalcounts else len(data)
+    usable = ex[:usable_len]
+
     # split into train and test
-    split = int(len(ex)*args.split)
-    train = ex[:split]
-    test = ex[split:]
+    split = int(usable_len*args.split)
+    train = usable[:split]
+    test = usable[split:]
 
     all_train.extend(train)
     all_test.extend(test)
 
     # record stats
-    stats['labels'][gen.getLabel()] = {
-        'total': total,
-        'not_detected_count': not_detected_count,
+    stats['labels'][l].update({
         'train': len(train),
         'test': len(test),
-        'count': len(ex),
-        'skip_count': gen.skipCount(),
-    }
+        'count_usable': usable_len,
+    })
 
-with tf.io.TFRecordWriter(os.path.join(args.output, 'train.tfrecords')) as writer:
-    for ex in all_train:
-        writer.write(ex.SerializeToString())
+# with tf.io.TFRecordWriter(os.path.join(args.output, 'train.tfrecords')) as writer:
+#     for ex in all_train:
+#         writer.write(ex.SerializeToString())
 
-with tf.io.TFRecordWriter(os.path.join(args.output, 'test.tfrecords')) as writer:
-    for ex in all_test:
-        writer.write(ex.SerializeToString())
+writeTfRecords(all_train, os.path.join(args.output, 'train.tfrecords'), args.shards)
+writeTfRecords(all_test, os.path.join(args.output, 'test.tfrecords'))
+# with tf.io.TFRecordWriter(os.path.join(args.output, 'test.tfrecords')) as writer:
+#     for ex in all_test:
+#         writer.write(ex.SerializeToString())
 
 stats['final_train_count'] = len(all_train)
 stats['final_test_count'] = len(all_test)
 
 print('stats:', json.dumps(stats, indent=2))
 
-# sharding
-# num_shards=10
-# with contextlib2.ExitStack() as tf_record_close_stack:
-#     output_tfrecords = tf_record_creation_util.open_sharded_output_tfrecords(tf_record_close_stack, tfrecordtrain, num_shards)
-#     for idx, ex in enumerate(train_tfs):
-#         output_shard_index = idx % num_shards
-#         output_tfrecords[output_shard_index].write(ex.SerializeToString())

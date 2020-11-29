@@ -2,17 +2,18 @@
 train_and_eval_tf2.py
 exporter_main_v2.py
 tensorboard
+train_t2.py (used to verify pipeline.config)
 
 ##  Commands
 ```
 # train and eval at the same time
-python .\train_and_eval_tf2.py --model_dir .\models\ssdresnet191 --pipeline_config_path .\models\ssdresnet191\pipeline.config
+python .\train_and_eval_tf2.py --model_dir .\models\d1 --pipeline_config_path .\models\d1\pipeline.config
 
 # view progress
-tensorboard --logdir=models/ssdresnet191
+tensorboard --logdir=models/d1
 
 # export model
-python .\exporter_main_v2.py --input_type image_tensor --pipeline_config_path .\models\ssdresnet191\pipeline.config --trained_checkpoint_dir .\models\ssdresnet191 
+python .\exporter_main_v2.py --input_type image_tensor --pipeline_config_path .\models\d1\pipeline.config --trained_checkpoint_dir .\models\ssdresnet191 
 --output_directory .\models\ssdresnet191\exported
 ```
 
@@ -31,7 +32,7 @@ prepare_data.py
 
 ## commands
 ```
-python .\prepare_data.py --dataset ..\data\ --output out --coco ..\training\ssd_resnet50_v1_fpn_640x640_coco17_tpu-8\saved_model\\ --maxperlabel 10
+python .\prepare_data.py --dataset .\data\ --output out --coco .\models\efficientdet_d1_coco17_tpu-32\saved_model\ --maxperlabel 350 --mindim 640 --equalcounts --shards=10
 ```
 
 ## what do
@@ -82,6 +83,5 @@ Object detection:
 
 Data prep:
 - https://www.tensorflow.org/tutorials/load_data/tfrecord
-- https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/using_your_own_dataset.md
 - https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/using_your_own_dataset.md
 - https://www.pyimagesearch.com/2020/04/20/detect-and-remove-duplicate-images-from-a-dataset-for-deep-learning/
