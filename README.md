@@ -7,7 +7,7 @@ train_t2.py (used to verify pipeline.config)
 ##  Commands
 ```
 # train and eval at the same time
-python .\train_and_eval_tf2.py --model_dir .\models\d1 --pipeline_config_path .\models\d1\pipeline.config
+python .\train_and_eval_tf2.py --model_dir .\models\d0 --pipeline_config_path .\models\d0\pipeline.config
 
 # view progress
 tensorboard --logdir=models/d1
@@ -32,7 +32,7 @@ prepare_data.py
 
 ## commands
 ```
-python .\prepare_data.py --dataset .\data\ --output out --coco .\models\efficientdet_d1_coco17_tpu-32\saved_model\ --maxperlabel 350 --mindim 640 --equalcounts --shards=10
+python .\prepare_data.py --dataset .\data\ --output out --coco .\models\efficientdet_d1_coco17_tpu-32\saved_model\ --maxperlabel 350 --mindim 640 --equalcounts
 ```
 
 ## what do

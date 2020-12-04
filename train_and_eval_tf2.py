@@ -6,6 +6,7 @@ from object_detection import model_lib_v2
 
 from object_detection.utils import config_util
 import multiprocessing
+import ctypes
 
 flags.DEFINE_string('pipeline_config_path', None, 'Path to pipeline config '
                     'file.')
@@ -25,36 +26,48 @@ flags.DEFINE_integer(
 FLAGS = flags.FLAGS
 
 
-def getCurrentStep(model_dir, ret_value):
+def getCurrentStep(ret_value, model_dir):
     global_step = tf.Variable(0, dtype=tf.compat.v2.dtypes.int64)
     latest_checkpoint = tf.train.latest_checkpoint(model_dir)
     tf.compat.v2.train.Checkpoint(step=global_step).restore(latest_checkpoint)
     ret_value.value = int(global_step.numpy())
 
 
-def runTrainLoop(pipeline_config_path, model_dir, checkpoint_every_n, train_steps = None):
-    if train_steps:
-        model_lib_v2.train_loop(
-            pipeline_config_path=pipeline_config_path,
-            model_dir=model_dir,
-            train_steps=train_steps,
-            checkpoint_every_n=checkpoint_every_n)
-    else:
-        model_lib_v2.train_loop(
-            pipeline_config_path=pipeline_config_path,
-            model_dir=model_dir,
-            checkpoint_every_n=checkpoint_every_n)
+def runTrainLoop(ret_value, pipeline_config_path, model_dir, checkpoint_every_n, train_steps=None):
+    try:
+        if train_steps:
+            model_lib_v2.train_loop(
+                pipeline_config_path=pipeline_config_path,
+                model_dir=model_dir,
+                train_steps=train_steps,
+                checkpoint_every_n=checkpoint_every_n,
+                checkpoint_max_to_keep=100,
+            )
+        else:
+            model_lib_v2.train_loop(
+                pipeline_config_path=pipeline_config_path,
+                model_dir=model_dir,
+                checkpoint_every_n=checkpoint_every_n,
+                checkpoint_max_to_keep=100,
+            )
+    except Exception as e:
+        ret_value.value = True
+        print(e)
 
 
-def runEval(pipeline_config_path, model_dir, train_steps, sample_1_of_n_eval_examples, sample_1_of_n_eval_on_train_examples):
-    wait_interval = timeout = 0  # don't wait
-    model_lib_v2.eval_continuously(
-        pipeline_config_path=pipeline_config_path,
-        model_dir=model_dir,
-        sample_1_of_n_eval_examples=sample_1_of_n_eval_examples,
-        sample_1_of_n_eval_on_train_examples=sample_1_of_n_eval_on_train_examples,
-        checkpoint_dir=model_dir,  # checkpoints are put into model_dir
-        wait_interval=wait_interval, timeout=timeout)
+def runEval(ret_value, pipeline_config_path, model_dir, sample_1_of_n_eval_examples, sample_1_of_n_eval_on_train_examples):
+    try:
+        wait_interval = timeout = 0  # don't wait
+        model_lib_v2.eval_continuously(
+            pipeline_config_path=pipeline_config_path,
+            model_dir=model_dir,
+            sample_1_of_n_eval_examples=sample_1_of_n_eval_examples,
+            sample_1_of_n_eval_on_train_examples=sample_1_of_n_eval_on_train_examples,
+            checkpoint_dir=model_dir,  # checkpoints are put into model_dir
+            wait_interval=wait_interval, timeout=timeout)
+    except Exception as e:
+        ret_value.value = True
+        print(e)
 
 
 def main(unused_argv):
@@ -67,9 +80,9 @@ def main(unused_argv):
         FLAGS.pipeline_config_path)['train_config'].num_steps
 
     while True:
-        current_step_value = multiprocessing.Value('i')
+        current_step_value = multiprocessing.Value(ctypes.c_int)
         p = multiprocessing.Process(target=getCurrentStep, args=[
-                                    FLAGS.model_dir, current_step_value])
+                                    current_step_value, FLAGS.model_dir])
         p.start()
         p.join()
 
@@ -83,24 +96,37 @@ def main(unused_argv):
 
         print("training steps {} to {}".format(current_step, up_to_step))
 
+        error_value = multiprocessing.Value(ctypes.c_bool)
         p = multiprocessing.Process(target=runTrainLoop, args=[
+            error_value,
             FLAGS.pipeline_config_path,
             FLAGS.model_dir,
+            FLAGS.checkpoint_every_n,
             up_to_step,
-            FLAGS.checkpoint_every_n])
+        ])
         p.start()
         p.join()
+
+        if error_value.value:
+            print("there was an error running training loop, stopping")
+            break
 
         print("evaluate")
 
+        error_value = multiprocessing.Value(ctypes.c_bool)
         p = multiprocessing.Process(target=runEval, args=[
+            error_value,
             FLAGS.pipeline_config_path,
             FLAGS.model_dir,
             FLAGS.sample_1_of_n_eval_examples,
-            FLAGS.checkpoint_every_n,
-            FLAGS.sample_1_of_n_eval_on_train_examples])
+            FLAGS.sample_1_of_n_eval_on_train_examples,
+        ])
         p.start()
         p.join()
+
+        if error_value.value:
+            print("there was an error running evaluation, stopping")
+            break
 
         print("done! and again")
 
