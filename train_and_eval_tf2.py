@@ -8,6 +8,8 @@ from object_detection.utils import config_util
 import multiprocessing
 import ctypes
 
+import winsound
+
 flags.DEFINE_string('pipeline_config_path', None, 'Path to pipeline config '
                     'file.')
 flags.DEFINE_integer('num_train_steps', None, 'Number of train steps.')
@@ -22,6 +24,8 @@ flags.DEFINE_string(
                        'where event and checkpoint files will be written.')
 flags.DEFINE_integer(
     'checkpoint_every_n', 1000, 'Integer defining how often we checkpoint.')
+flags.DEFINE_bool(
+    'alert', False, 'Whether to play a sound when done (windows only)')
 
 FLAGS = flags.FLAGS
 
@@ -130,6 +134,10 @@ def main(unused_argv):
 
         print("done! and again")
 
+    if FLAGS.alert:
+        # windows only
+        while True:
+            winsound.PlaySound("SystemExit", winsound.SND_ALIAS)
 
 if __name__ == '__main__':
     tf.compat.v1.app.run()

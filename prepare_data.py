@@ -316,6 +316,7 @@ for l in labels:
 
 label_data = {}
 for l, gen in label_gens.items():
+    print('generating for', l)
     total = gen.total()
     not_detected_count = 0
 
@@ -328,6 +329,9 @@ for l, gen in label_gens.items():
         except CocoClassNotFound as e:
             print('ERROR:', e)
             not_detected_count += 1
+        except PIL.UnidentifiedImageError as e:
+            print('ERROR:', e)
+            not_detected_count += 1 # ignore me, this is just because this is not possible since we cover this case during dedupe
 
         if args.maxperlabel and len(ex) >= int(args.maxperlabel):
             break
@@ -344,9 +348,10 @@ for l, gen in label_gens.items():
 all_train = []
 all_test = []
 for l, data in label_data.items():
+    print('collecting for', l)
     print(l, len(data))
     usable_len = len(min(label_data.values(), key=len)) if args.equalcounts else len(data)
-    usable = ex[:usable_len]
+    usable = data[:usable_len]
 
     # split into train and test
     split = int(usable_len*args.split)
