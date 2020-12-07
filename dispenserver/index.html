@@ -1,0 +1,89 @@
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Doggo Traino</title>
+    <style>
+        button {
+            padding: 8px 16px;
+        }
+
+        pre {
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+
+        video {
+            width: 100%;
+        }
+
+        .option {
+            margin-bottom: 8px;
+        }
+
+        #media {
+            max-width: 1280px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <button id="start" onclick="start()">Start</button>
+    <button id="stop" style="display: none" onclick="stop()">Stop</button>
+
+
+    <div id="unmedia">
+        <!-- <h2>Preview + Detection</h2> -->
+    </div>
+    <div id="media" style="display: none">
+        <video id="previewVideo" autoplay="true" playsinline="true"></video>
+        <video id="video" autoplay="true" playsinline="true"></video>
+    </div>
+
+    <div id="undata">
+        <!-- <h2>Debugging data</h2> -->
+    </div>
+    <div id="data" style="display: none">
+        <pre id="data-channel" style="height: 200px;"></pre>
+
+        <div style="display: none">
+            <h2>State</h2>
+            <p>
+                ICE gathering state: <span id="ice-gathering-state"></span>
+            </p>
+            <p>
+                ICE connection state: <span id="ice-connection-state"></span>
+            </p>
+            <p>
+                Signaling state: <span id="signaling-state"></span>
+            </p>
+
+            <h2>SDP</h2>
+
+            <h3>Offer</h3>
+            <pre id="offer-sdp"></pre>
+
+            <h3>Answer</h3>
+            <pre id="answer-sdp"></pre>
+        </div>
+    </div>
+
+    <audio id="paw">
+        <source src="/paw" type="audio/mp4">
+    </audio>
+    <audio id="stand">
+        <source src="/stand" type="audio/mp4">
+    </audio>
+    <audio id="sit">
+        <source src="/sit" type="audio/mp4">
+    </audio>
+    <audio id="down">
+        <source src="/down" type="audio/mp4">
+    </audio>
+
+    <script src="client.js"></script>
+</body>
+
+</html>
