@@ -1,6 +1,17 @@
 # Machine learning
 Facilities for data preparation and training a custom object detection model.
 
+Training/validation dataset are located in `output/prepared-data`.
+Trained saved models are located in `output/saved_model`.
+
+The saved models (other than EfficientDet D0) require decompression:
+```
+# compress
+tar cvzf - faster-rcnn | split -b 50m - faster-rcnn.tar.gz.
+# decompress
+cat faster-rcnn.tar.gz.* | tar xzvf -
+```
+
 ## Training
 Runs training and evaluation at the same time. View training metrics and losses in tensorboard.
 
@@ -78,7 +89,7 @@ Run a saved_model on a tfrecord and generate the confusion matrix
 
 ### Commands
 ```
-python .\confuse_the_matrix.py --tfrecord .\out640\test.tfrecords --model '.\models\ssdresnet640\exported\saved_model'
+python .\confuse_the_matrix.py --tfrecord .\output\prepared-data\test.tfrecords --model .\output\saved_model\efficientdet-d0
 ```
 
 # Application service
