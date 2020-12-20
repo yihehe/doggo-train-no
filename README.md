@@ -70,6 +70,17 @@ output
 python .\prepare_data.py --dataset .\data\ --output out --coco .\models\efficientdet_d1_coco17_tpu-32\saved_model\ --maxperlabel 350 --mindim 640 --equalcounts
 ```
 
+## Evaluation
+Run a saved_model on a tfrecord and generate the confusion matrix
+
+### Files
+- confuse_the_matrix.py
+
+### Commands
+```
+python .\confuse_the_matrix.py --tfrecord .\out640\test.tfrecords --model '.\models\ssdresnet640\exported\saved_model'
+```
+
 # Application service
 A service to run object detection on a video feed and dispense treats based on a state machine.
 

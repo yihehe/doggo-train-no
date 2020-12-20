@@ -29,6 +29,7 @@ flags.DEFINE_bool(
 
 FLAGS = flags.FLAGS
 
+# tf2.4 on ampere OOM
 physical_devices = tf.config.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
