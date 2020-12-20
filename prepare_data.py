@@ -26,7 +26,11 @@ from IPython.display import display
 import PIL
 import json
 import cv2
+import timeit
 
+# tf2.4 on ampere OOM
+physical_devices = tf.config.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 class CocoClassNotFound(Exception):
     pass
@@ -81,22 +85,21 @@ def generate_and_persist_labels(labels, outdir):
     return label_map_util.get_label_map_dict(label_map)
 
 
-def writeTfRecords(examples, out, num_shards = None):
+def writeTfRecords(examples, out, num_shards=None):
     if num_shards:
         num_shards = int(num_shards)
-        print(num_shards)
         with contextlib2.ExitStack() as tf_record_close_stack:
-            output_tfrecords = tf_record_creation_util.open_sharded_output_tfrecords(tf_record_close_stack, out, num_shards)
-            print(len(output_tfrecords))
+            output_tfrecords = tf_record_creation_util.open_sharded_output_tfrecords(
+                tf_record_close_stack, out, num_shards)
             for idx, ex in enumerate(examples):
-                print(idx)
                 output_shard_index = idx % num_shards
-                print(output_shard_index)
-                output_tfrecords[output_shard_index].write(ex.SerializeToString())
+                output_tfrecords[output_shard_index].write(
+                    ex.SerializeToString())
     else:
         with tf.io.TFRecordWriter(out) as writer:
             for ex in examples:
                 writer.write(ex.SerializeToString())
+
 
 class JpgCache:
     def __init__(self, outdir, mindim=None):
@@ -144,8 +147,6 @@ class TfGen:
     @cached_property
     def detection_model(self):
         print('[DOGGO] loading model...', self.cocomodel)
-        # print('../training/ssd_resnet50_v1_fpn_640x640_coco17_tpu-8/saved_model')
-        # return p
         return tf.saved_model.load(self.cocomodel)
 
     def run_inference_for_single_image(self, image):
@@ -248,9 +249,6 @@ def partition(paths, num, ratio, label):
     train_ids = ids[:split]
     test_ids = ids[split:num]
 
-    print(train_ids)
-    print(test_ids)
-
     train_tfs = []
     test_tfs = []
     for idx in train_ids:
@@ -289,12 +287,14 @@ parser.add_argument(
     '--mindim', help='minimum dimension to resize to (if provided)')
 parser.add_argument('--equalcounts', action='store_true',
                     help='if we should have the same number of counts per label')
-parser.add_argument('--shards', 
+parser.add_argument('--shards',
                     help='number of shards to write the training TfRecords')
 
 args = parser.parse_args()
 
 # business logic
+
+start = timeit.default_timer()
 
 target_coco_class = 18  # dog
 
@@ -331,13 +331,14 @@ for l, gen in label_gens.items():
             not_detected_count += 1
         except PIL.UnidentifiedImageError as e:
             print('ERROR:', e)
-            not_detected_count += 1 # ignore me, this is just because this is not possible since we cover this case during dedupe
+            # ignore me, this is just because this is not possible since we cover this case during dedupe
+            not_detected_count += 1
 
         if args.maxperlabel and len(ex) >= int(args.maxperlabel):
             break
 
     label_data[l] = ex
-    
+
     stats['labels'][l] = {
         'total': total,
         'not_detected_count': not_detected_count,
@@ -350,7 +351,8 @@ all_test = []
 for l, data in label_data.items():
     print('collecting for', l)
     print(l, len(data))
-    usable_len = len(min(label_data.values(), key=len)) if args.equalcounts else len(data)
+    usable_len = len(min(label_data.values(), key=len)
+                     ) if args.equalcounts else len(data)
     usable = data[:usable_len]
 
     # split into train and test
@@ -368,18 +370,16 @@ for l, data in label_data.items():
         'count_usable': usable_len,
     })
 
-# with tf.io.TFRecordWriter(os.path.join(args.output, 'train.tfrecords')) as writer:
-#     for ex in all_train:
-#         writer.write(ex.SerializeToString())
-
-writeTfRecords(all_train, os.path.join(args.output, 'train.tfrecords'), args.shards)
+writeTfRecords(all_train, os.path.join(
+    args.output, 'train.tfrecords'), args.shards)
 writeTfRecords(all_test, os.path.join(args.output, 'test.tfrecords'))
-# with tf.io.TFRecordWriter(os.path.join(args.output, 'test.tfrecords')) as writer:
-#     for ex in all_test:
-#         writer.write(ex.SerializeToString())
 
 stats['final_train_count'] = len(all_train)
 stats['final_test_count'] = len(all_test)
 
+stats['runtime_ms'] = int((timeit.default_timer() - start) * 1000)
+
 print('stats:', json.dumps(stats, indent=2))
 
+with open(os.path.join(args.output, 'stats.json'), "w") as f:
+    f.write(json.dumps(stats, indent=2))

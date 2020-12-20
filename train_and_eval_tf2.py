@@ -29,6 +29,8 @@ flags.DEFINE_bool(
 
 FLAGS = flags.FLAGS
 
+physical_devices = tf.config.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 def getCurrentStep(ret_value, model_dir):
     global_step = tf.Variable(0, dtype=tf.compat.v2.dtypes.int64)
